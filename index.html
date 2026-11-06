@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesseracto 4D Cuántico</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000000;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            cursor: default;
+        }
+
+        /* Botón de Inicio Blanco Centrado */
+        #btn-inicio {
+            padding: 18px 45px;
+            font-size: 1.6rem;
+            color: #ffffff;
+            background: transparent;
+            border: 2px solid #ffffff;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+            z-index: 10;
+        }
+
+        #btn-inicio:hover {
+            background-color: #ffffff;
+            color: #000000;
+            box-shadow: 0 0 35px rgba(255, 255, 255, 0.9);
+            transform: scale(1.08);
+        }
+
+        /* Controles Flotantes Superior Derecha */
+        .controles {
+            display: none;
+            position: fixed;
+            top: 25px;
+            right: 25px;
+            gap: 12px;
+            z-index: 20;
+        }
+
+        .btn-control {
+            padding: 10px 22px;
+            font-size: 0.95rem;
+            color: #ffffff;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 30px;
+            backdrop-filter: blur(5px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-control:hover {
+            background: #ffffff;
+            color: #000000;
+            transform: scale(1.05);
+        }
+
+        #btn-salir:hover {
+            background: rgba(255, 0, 85, 0.9);
+            border-color: #ff0055;
+            color: #ffffff;
+        }
+
+        /* Contenedor del Lienzo */
+        #canvas-container {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CAMBIA AQUÍ LA RUTA A TU ARCHIVO DE AUDIO (ej: musica28.mp3, audio.mp3, etc.) -->
+    <audio id="miMusica" src="musica33.mp3" preload="auto" loop></audio>
+
+    <!-- Botón de Inicio Blanco -->
+    <button id="btn-inicio">Inicio</button>
+
+    <!-- Controles flotantes -->
+    <div class="controles" id="panel-controles">
+        <button class="btn-control" id="btn-audio">🔊 Sonido: ON</button>
+        <button class="btn-control" id="btn-salir">Salir</button>
+    </div>
+
+    <!-- Contenedor del lienzo -->
+    <div id="canvas-container">
+        <canvas id="tesseractCanvas"></canvas>
+    </div>
+
+    <script>
+        const btnInicio = document.getElementById('btn-inicio');
+        const btnSalir = document.getElementById('btn-salir');
+        const btnAudio = document.getElementById('btn-audio');
+        const panelControles = document.getElementById('panel-controles');
+        const canvasContainer = document.getElementById('canvas-container');
+        const canvas = document.getElementById('tesseractCanvas');
+        const ctx = canvas.getContext('2d');
+        const audioElement = document.getElementById('miMusica');
+
+        let animacionId = null;
+        let activo = false;
+
+        let anguloXY = 0;
+        let anguloXW = 0;
+        let anguloZW = 0;
+        let tiempoInicio = 0;
+
+        // Vértices 4D del Hipercubo (Tesseracto)
+        const vertices4D = [];
+        for (let i = 0; i < 16; i++) {
+            vertices4D.push([
+                (i & 1) ? 1 : -1,
+                (i & 2) ? 1 : -1,
+                (i & 4) ? 1 : -1,
+                (i & 8) ? 1 : -1
+            ]);
+        }
+
+        // Aristas que conectan los 16 vértices en 4D
+        const aristas4D = [];
+        for (let i = 0; i < 16; i++) {
+            for (let j = i + 1; j < 16; j++) {
+                let diff = 0;
+                for (let k = 0; k < 4; k++) {
+                    if (vertices4D[i][k] !== vertices4D[j][k]) diff++;
+                }
+                if (diff === 1) {
+                    aristas4D.push([i, j]);
+                }
+            }
+        }
+
+        function ajustarCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', () => {
+            if (activo) ajustarCanvas();
+        });
+
+        // Control del Botón de Audio (ON/OFF)
+        btnAudio.addEventListener('click', (e) => {
+            e.stopPropagation();
+            audioElement.muted = !audioElement.muted;
+            btnAudio.textContent = audioElement.muted ? "🔇 Sonido: OFF" : "🔊 Sonido: ON";
+        });
+
+        // Iniciar Animación
+        btnInicio.addEventListener('click', () => {
+            btnInicio.style.display = 'none';
+            panelControles.style.display = 'flex';
+            canvasContainer.style.display = 'block';
+
+            ajustarCanvas();
+            reiniciarBucle();
+            activo = true;
+
+            audioElement.currentTime = 0;
+            audioElement.muted = false;
+            btnAudio.textContent = "🔊 Sonido: ON";
+            audioElement.play().catch(err => console.log(err));
+
+            iniciarAnimacion();
+        });
+
+        // Salir
+        btnSalir.addEventListener('click', (e) => {
+            e.stopPropagation();
+            activo = false;
+            if (animacionId) cancelAnimationFrame(animacionId);
+
+            audioElement.pause();
+            audioElement.currentTime = 0;
+
+            canvasContainer.style.display = 'none';
+            panelControles.style.display = 'none';
+            btnInicio.style.display = 'block';
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        function reiniciarBucle() {
+            tiempoInicio = Date.now();
+            anguloXY = 0;
+            anguloXW = 0;
+            anguloZW = 0;
+        }
+
+        // BUCLE PRINCIPAL DE PROYECCIÓN 4D -> 3D -> 2D
+        function iniciarAnimacion() {
+            if (!activo) return;
+
+            // Limpieza absoluta del fondo negro
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const ahora = Date.now();
+            const transcurrido = (ahora - tiempoInicio) * 0.001;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            // Velocidades de rotación en 4 dimensiones
+            anguloXY += 0.012;
+            anguloXW += 0.008;
+            anguloZW += 0.006;
+
+            const verticesProyectados2D = [];
+            const escalaBase = Math.min(canvas.width, canvas.height) * 0.22;
+
+            // Transformaciones 4D
+            vertices4D.forEach(v => {
+                let x = v[0], y = v[1], z = v[2], w = v[3];
+
+                // Rotación en plano XW
+                let cos1 = Math.cos(anguloXW), sin1 = Math.sin(anguloXW);
+                let x1 = x * cos1 - w * sin1;
+                let w1 = x * sin1 + w * cos1;
+                let y1 = y;
+                let z1 = z;
+
+                // Rotación en plano XY
+                let cos2 = Math.cos(anguloXY), sin2 = Math.sin(anguloXY);
+                let x2 = x1 * cos2 - y1 * sin2;
+                let y2 = x1 * sin2 + y1 * cos2;
+                let z2 = z1;
+                let w2 = w1;
+
+                // Rotación en plano ZW
+                let cos3 = Math.cos(anguloZW), sin3 = Math.sin(anguloZW);
+                let z3 = z2 * cos3 - w2 * sin3;
+                let w3 = z2 * sin3 + w2 * cos3;
+                let x3 = x2;
+                let y3 = y2;
+
+                // Proyección 4D a 3D (distancia W)
+                let distanciaW = 2.2;
+                let wPerspectiva = 1 / (distanciaW - w3);
+
+                let x3d = x3 * wPerspectiva;
+                let y3d = y3 * wPerspectiva;
+                let z3d = z3 * wPerspectiva;
+
+                // Proyección 3D a 2D (con perspectiva Z)
+                let distanciaZ = 3.0;
+                let zPerspectiva = 1 / (distanciaZ - z3d);
+
+                verticesProyectados2D.push({
+                    px: cx + x3d * escalaBase * zPerspectiva * 2.2,
+                    py: cy + y3d * escalaBase * zPerspectiva * 2.2,
+                    escala: zPerspectiva
+                });
+            });
+
+            // DIBUJAR ARISTAS DEL TESSERACTO
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.6;
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = '#ffffff';
+
+            aristas4D.forEach(([i, j]) => {
+                let p1 = verticesProyectados2D[i];
+                let p2 = verticesProyectados2D[j];
+
+                ctx.beginPath();
+                ctx.moveTo(p1.px, p1.py);
+                ctx.lineTo(p2.px, p2.py);
+                ctx.stroke();
+            });
+
+            // DIBUJAR VÉRTICES (Esferas brillantes)
+            verticesProyectados2D.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.px, p.py, 3.5 * p.escala, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+            });
+
+            ctx.restore();
+
+            // Ondas energéticas circulares sutiles en el fondo durante el ciclo
+            if (Math.sin(transcurrido * 1.5) > 0.5) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(cx, cy, escalaBase * 1.8 + Math.sin(transcurrido * 3) * 20, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            animacionId = requestAnimationFrame(iniciarAnimacion);
+        }
+    </script>
+</body>
+</html>
